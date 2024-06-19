@@ -1,6 +1,7 @@
 package gitdl
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,15 +16,23 @@ import (
 
 type Options struct {
 	excludesFiles []string
+	replaceMap    Map
 	logs          bool
 }
 
 type Option func(*Options)
 
+type Map = map[string]string
+
 var (
 	WithExclusions = func(exclusions ...string) Option {
 		return func(o *Options) {
 			o.excludesFiles = exclusions
+		}
+	}
+	WithReplace = func(replaceMap Map) Option {
+		return func(o *Options) {
+			o.replaceMap = replaceMap
 		}
 	}
 	WithLogs = func(o *Options) {
@@ -46,8 +55,28 @@ func downloadFile(url, filePath string, opts *Options) error {
 	}
 	defer file.Close()
 
-	_, err = io.Copy(file, res.Body)
+	if len(opts.replaceMap) > 0 {
+		// here come the tricky part:
 
+		dataBytes, _ := io.ReadAll(res.Body)
+
+		for replaceKey, replaceValue := range opts.replaceMap {
+			// rewriting into buffer remplaced values
+			dataBytes = bytes.ReplaceAll(
+				dataBytes,
+				[]byte(replaceKey),
+				[]byte(replaceValue),
+			)
+		}
+
+		if _, err := file.Write(dataBytes); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	_, err = io.Copy(file, res.Body)
 	return err
 }
 

@@ -21,12 +21,14 @@ func main() {
 		log.Fatal(fmt.Errorf("you should specify the repo you want to clone (e.g. gitdl -folder=/ -output=gitdl 4lxprime/gitdl)"))
 	}
 
-	if *outputFlag == "" && !strings.Contains(*repoFlag, "/") {
+	if !strings.Contains(*repoFlag, "/") {
 		log.Fatal(fmt.Errorf("repo argument must contains / (e.g. 4lxprime/gitdl or github.com/4lxprime/gitdl)"))
+	}
 
-	} else if *outputFlag == "" {
+	if *outputFlag == "" {
 		repoSplit := strings.Split(*repoFlag, "/")
 		repoName := repoSplit[len(repoSplit)-1]
+
 		*outputFlag = repoName
 	}
 
