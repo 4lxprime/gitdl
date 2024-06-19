@@ -12,6 +12,8 @@ import (
 func main() {
 	repoFlag := flag.String("repo", "", "the repo you want to download folder from")
 	folderFlag := flag.String("folder", "/", "folder you want to download from repo")
+	branchFlag := flag.String("branch", "main", "the branch you want to clone")
+	authFlag := flag.String("auth", "", "your github auth token")
 	outputFlag := flag.String("output", "", "local output folder")
 	logsFlag := flag.Bool("logs", true, "display downloading logs")
 
@@ -35,6 +37,12 @@ func main() {
 	var options []gitdl.Option
 	if *logsFlag {
 		options = append(options, gitdl.WithLogs)
+	}
+
+	options = append(options, gitdl.WithBranch(*branchFlag))
+
+	if *authFlag != "" {
+		options = append(options, gitdl.WithAuth(*authFlag))
 	}
 
 	if err := gitdl.DownloadGit(
