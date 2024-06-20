@@ -2,7 +2,7 @@
 git downloader for specific folder
 
 ## cli:
-you can run the cli with `go run github.com/4lxprime/gitdl -h` from anywhere on your system as long as you have go installed.
+you can run the cli with `go run github.com/4lxprime/gitdl@main -h` from anywhere on your system as long as you have go installed.
 
 ## code:
 ```golang
