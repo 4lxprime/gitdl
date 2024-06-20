@@ -16,6 +16,7 @@ func main() {
 	authFlag := flag.String("auth", "", "your github auth token")
 	outputFlag := flag.String("output", "", "local output folder")
 	logsFlag := flag.Bool("logs", true, "display downloading logs")
+	noChecksumFlag := flag.Bool("nochecksum", false, "disable downloading checksum")
 
 	flag.Parse()
 
@@ -35,15 +36,20 @@ func main() {
 	}
 
 	var options []gitdl.Option
+
 	if *logsFlag {
 		options = append(options, gitdl.WithLogs)
 	}
 
-	options = append(options, gitdl.WithBranch(*branchFlag))
+	if *noChecksumFlag {
+		options = append(options, gitdl.WithoutChecksum)
+	}
 
 	if *authFlag != "" {
 		options = append(options, gitdl.WithAuth(*authFlag))
 	}
+
+	options = append(options, gitdl.WithBranch(*branchFlag)) // default set to main
 
 	if err := gitdl.DownloadGit(
 		*repoFlag,

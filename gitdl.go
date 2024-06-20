@@ -2,6 +2,8 @@ package gitdl
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +22,7 @@ type Options struct {
 	excludesFiles []string
 	replaceMap    Map
 	logs          bool
+	noChecksum    bool
 }
 
 type Option func(*Options)
@@ -52,10 +55,13 @@ var (
 	WithLogs = func(o *Options) {
 		o.logs = true
 	}
+	WithoutChecksum = func(o *Options) {
+		o.noChecksum = true
+	}
 )
 
-func downloadFile(url, filePath string, opts *Options) error {
-	log.Println(url)
+// download file will download
+func downloadFile(url, filePath, fileHash string, fileSize int, opts *Options) error {
 	_ = opts
 
 	res, err := http.Get(url)
@@ -71,20 +77,38 @@ func downloadFile(url, filePath string, opts *Options) error {
 	defer file.Close()
 
 	if len(opts.replaceMap) > 0 {
-		// here come the tricky part:
+		// fixed size download, like this we save memory
+		bodyBytes, err := io.ReadAll(res.Body)
+		if err != nil {
+			panic(err)
+		}
 
-		dataBytes, _ := io.ReadAll(res.Body)
+		if len(bodyBytes) != fileSize {
+			return fmt.Errorf("download error: file size don't match, the file may have been corrupted, please retry")
+		}
+
+		if !opts.noChecksum { // by default true, so checksum by default
+			header := fmt.Sprintf("blob %d\000", len(bodyBytes))
+			content := []byte(header + string(bodyBytes))
+
+			hashBytes := sha1.Sum(content)
+			hash := hex.EncodeToString(hashBytes[:])
+
+			if hash != fileHash {
+				return fmt.Errorf("checksum error: bad checksum (%s)", url)
+			}
+		}
 
 		for replaceKey, replaceValue := range opts.replaceMap {
 			// rewriting into buffer remplaced values
-			dataBytes = bytes.ReplaceAll(
-				dataBytes,
+			bodyBytes = bytes.ReplaceAll(
+				bodyBytes,
 				[]byte(replaceKey),
 				[]byte(replaceValue),
 			)
 		}
 
-		if _, err := file.Write(dataBytes); err != nil {
+		if _, err := file.Write(bodyBytes); err != nil {
 			return err
 		}
 
@@ -141,14 +165,16 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 	}
 
 	for _, item := range items {
-		name := item["name"].(string)
-		path := item["path"].(string)
-		typeStr := item["type"].(string)
+		itemName := item["name"].(string)
+		itemPath := item["path"].(string)
+		itemType := item["type"].(string)
+		itemHash := item["sha"].(string)
+		itemSize := int(item["size"].(float64))
 
-		localItemPath := fmt.Sprintf("%s/%s", localPath, name)
+		localItemPath := fmt.Sprintf("%s/%s", localPath, itemName)
 
 		if opts.logs {
-			log.Println("downloading", typeStr, localItemPath)
+			log.Println("downloading", itemType, localItemPath)
 		}
 
 		// if filepath does match any exclude pattern, we'll just return
@@ -157,7 +183,7 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 			return nil
 		}
 
-		switch typeStr {
+		switch itemType {
 		case "dir":
 			if err := os.MkdirAll(localItemPath, os.ModePerm); err != nil {
 				return err
@@ -165,7 +191,7 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 
 			downloadFolder(
 				gitRepo,
-				path, // next path to download
+				itemPath, // next path to download
 				localItemPath,
 				opts,
 			) // reccursive download
@@ -175,12 +201,14 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 				"https://raw.githubusercontent.com/%s/%s/%s",
 				gitRepo,
 				*opts.branch,
-				path,
+				itemPath,
 			)
 
 			if err := downloadFile(
 				fileURL,
 				localItemPath,
+				itemHash,
+				itemSize,
 				opts,
 			); err != nil {
 				return err
@@ -210,6 +238,10 @@ func DownloadGit(gitRepo, gitPath, localPath string, options ...Option) error {
 	// removing the github url
 	if strings.Contains(gitRepo, "github.com/") {
 		gitRepo = strings.ReplaceAll(gitRepo, "github.com/", "")
+	}
+
+	if opts.noChecksum && opts.logs {
+		log.Println("checksum disabled: downloaded files can be corrupted")
 	}
 
 	if _, err := os.Stat(localPath); os.IsNotExist(err) {
