@@ -1,4 +1,4 @@
-package gitdl
+package main
 
 import (
 	"bytes"
