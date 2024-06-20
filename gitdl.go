@@ -180,7 +180,7 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 		// if filepath does match any exclude pattern, we'll just return
 		ignore := gitignore.CompileIgnoreLines(opts.excludesFiles...)
 		if ok := ignore.MatchesPath(localItemPath); ok {
-			return nil
+			continue
 		}
 
 		switch itemType {
@@ -189,12 +189,14 @@ func downloadFolder(gitRepo, gitPath, localPath string, opts *Options) error {
 				return err
 			}
 
-			downloadFolder(
+			if err := downloadFolder( // reccursive download
 				gitRepo,
 				itemPath, // next path to download
 				localItemPath,
 				opts,
-			) // reccursive download
+			); err != nil {
+				return err
+			}
 
 		case "file":
 			fileURL := fmt.Sprintf(
